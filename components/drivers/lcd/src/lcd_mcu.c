@@ -67,15 +67,31 @@ static void lcd_preinit_register_handler(lcd_preinit_handler_t handler)
     lcd_preinit_handler = handler;
 }
 
+#include "printf.h"
+
 static void lcd_init_sequence_for_ili9481(void)
 {
-    uint8_t t[2];
+    // printk("lcd_init_sequence_for_ili9481\r\n");
+
+    uint8_t t[24];
     // lcd.clear((99, 99, 99))
-    mcu_lcd_clear(0xc63);
-    // lcd.register(0xD1, 0x00)
+    mcu_lcd_clear(0xe28d);
+
+    // lcd.register(0xd0, [0x07,0x42,0x1b])
+    tft_write_command(0xD0);
+    t[0] = (0x07);
+    t[1] = (0x42);
+    t[2] = (0x1b);
+    tft_write_byte(t, 3);
+
+    // lcd.register(0xd1, [0x00,0x05,0x0c])
     tft_write_command(0xD1); /* Unk */
     t[0] = (0x00);
-    tft_write_byte(t, 1);
+    t[1] = (0x05);
+    t[2] = (0x0c);
+    tft_write_byte(t, 3);
+
+
 }
 
 static void lcd_init_sequence_for_ili9486(void)
@@ -457,6 +473,67 @@ static void mcu_lcd_fill_rectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16
     tft_fill_data(&data, (x2 - x1) * (y2 - y1) / 2);
 }
 
+static void mcu_lcd_draw_line(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color) {
+    // pick the greater value of LCD width and height
+    uint16_t max_dim;
+    max_dim = g_lcd_w > g_lcd_h ? g_lcd_w : g_lcd_h;
+    if ((x1 == x2 && y1 == y2) || x1 >= max_dim || x2 >= max_dim || y1 >= max_dim || y2 >= max_dim) {
+        // Invalid shape.
+        return;
+    }
+
+    #if LCD_SWAP_COLOR_BYTES
+        color = SWAP_16(color);
+    #endif
+
+    uint32_t data = ((uint32_t)color << 16) | (uint32_t)color;
+
+    // Check if the line is horizontal or vertical
+    if (y1 == y2) {
+        // Horizontal line
+        lcd_set_area(x1, y1, x2, y1);
+        tft_fill_data(&data, x2 - x1);
+    } else if (x1 == x2) {
+        // Vertical line
+        lcd_set_area(x1, y1, x1, y2);
+        tft_fill_data(&data, y2 - y1);
+    } else {
+        // Diagonal line - not handled yet
+        return;
+    }
+}
+static void mcu_lcd_fill_circle(uint16_t x0, uint16_t y0, uint16_t radius, uint8_t quadrant, uint16_t color) {
+    int16_t x = radius;
+    int16_t y = 0;
+    int16_t err = 0;
+
+     while (x >= y) {
+        if (quadrant == 0 || quadrant == 1) { // Top-Right Quadrant
+            mcu_lcd_draw_line(x0, y0 - y, x0 + x, y0 - y, color);
+            mcu_lcd_draw_line(x0, y0 - x, x0 + y, y0 - x, color);
+        }
+        if (quadrant == 0 || quadrant == 2) { // Top-Left Quadrant
+            mcu_lcd_draw_line(x0 - x, y0 - y, x0, y0 - y, color);
+            mcu_lcd_draw_line(x0 - y, y0 - x, x0, y0 - x, color);
+        }
+        if (quadrant == 0 || quadrant == 3) { // Bottom-Left Quadrant
+            mcu_lcd_draw_line(x0 - x, y0 + y, x0, y0 + y, color);
+            mcu_lcd_draw_line(x0 - y, y0 + x, x0, y0 + x, color);
+        }
+        if (quadrant == 0 || quadrant == 4) { // Bottom-Right Quadrant
+            mcu_lcd_draw_line(x0, y0 + y, x0 + x, y0 + y, color);
+            mcu_lcd_draw_line(x0, y0 + x, x0 + y, y0 + x, color);
+        }
+
+        y += 1;
+        err += 1 + 2*y;
+        if (2*(err - x) + 1 > 0) {
+            x -= 1;
+            err += 1 - 2*x;
+        }
+    }
+}
+
 static void lcd_draw_rectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t width, uint16_t color)
 {
     uint32_t data_buf[640] = {0};
@@ -656,4 +733,6 @@ lcd_t lcd_mcu = {
 	.draw_pic_gray = mcu_lcd_draw_pic_gray,
 	.draw_pic_grayroi = mcu_lcd_draw_pic_grayroi,
 	.fill_rectangle	= mcu_lcd_fill_rectangle,
+    .draw_line	= mcu_lcd_draw_line,
+    .fill_circle = mcu_lcd_fill_circle,
 };
