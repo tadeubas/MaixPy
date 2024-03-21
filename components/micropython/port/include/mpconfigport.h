@@ -56,7 +56,7 @@
 #define MICROPY_OPT_MPZ_BITWISE             (1)
 
 
-#define MICROPY_ENABLE_COMPILER     (1)
+#define MICROPY_ENABLE_COMPILER     (0)
 
 #define MICROPY_QSTR_BYTES_IN_LEN           (1)
 #define MICROPY_QSTR_BYTES_IN_HASH          (1)
@@ -161,9 +161,14 @@ extern const struct _mp_print_t mp_debug_print;
 #define MICROPY_PY_BUILTINS_ROUND_INT       (1)
 #define MICROPY_PY_BUILTINS_TIMEOUTERROR    (1)
 #define MICROPY_PY_ALL_SPECIAL_METHODS      (1)
-#define MICROPY_PY_BUILTINS_COMPILE         (1)
+#if MICROPY_ENABLE_COMPILER
+    #define MICROPY_PY_BUILTINS_COMPILE     (1)
+    #define MICROPY_PY_BUILTINS_EXECFILE    (1)
+#else
+    #define MICROPY_PY_BUILTINS_COMPILE     (0)
+    #define MICROPY_PY_BUILTINS_EXECFILE    (0)
+#endif //MICROPY_ENABLE_COMPILER
 #define MICROPY_PY_BUILTINS_ENUMERATE       (1)
-#define MICROPY_PY_BUILTINS_EXECFILE        (1)
 #define MICROPY_PY_BUILTINS_FILTER          (1)
 #define MICROPY_PY_BUILTINS_REVERSED        (1)
 #define MICROPY_PY_BUILTINS_NOTIMPLEMENTED  (1)
