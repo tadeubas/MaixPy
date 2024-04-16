@@ -34,6 +34,7 @@ config = json.loads("""
             "BUTTON_C": 11,
             "I2C_SDA": 31,
             "I2C_SCL": 30
+            "BACKLIGHT": 17,
         },
         "display": {
             "touch": false,
