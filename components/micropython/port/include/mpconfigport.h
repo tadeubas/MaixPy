@@ -235,7 +235,9 @@ extern const struct _mp_print_t mp_debug_print;
 
 // extended modules
 #define MICROPY_PY_UCTYPES                  (1)
-#define MICROPY_PY_UZLIB                    (1)
+#define MICROPY_PY_UZLIB                    (0)
+#define MICROPY_PY_DEFLATE                  (1)
+#define MICROPY_PY_DEFLATE_COMPRESS         (1)
 #define MICROPY_PY_UJSON                    (1)
 #if CONFIG_MICROPYTHON_PY_URE_ENABLE
     #define MICROPY_PY_URE                  (1)
@@ -548,7 +550,7 @@ extern const struct _mp_obj_module_t mp_module_touchscreen;
     { MP_OBJ_NEW_QSTR(MP_QSTR_os), (mp_obj_t)&uos_module }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_random), (mp_obj_t)&mp_module_urandom }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_struct), (mp_obj_t)&mp_module_ustruct }, \
-    { MP_OBJ_NEW_QSTR(MP_QSTR_zlib), (mp_obj_t)&mp_module_uzlib }, \
+    { MP_OBJ_NEW_QSTR(MP_QSTR_zlib), (mp_obj_t)&mp_module_deflate }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_io), (mp_obj_t)&mp_module_io }, \
     MICROPYTHON_PY_URE_WEAK_DEF \
     MAIXPY_HASHLIB_WEAK_DEF

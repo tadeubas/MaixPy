@@ -240,7 +240,7 @@ if(CONFIG_COMPONENT_MICROPYTHON_ENABLE)
     list(APPEND MPY_EXTMOD_SRCS 
                         "core/extmod/moductypes.c"
                         "core/extmod/modujson.c"
-                        "core/extmod/moduzlib.c"
+                        "core/extmod/moddeflate.c"
                         "core/extmod/moduheapq.c"
                         "core/extmod/modutimeq.c"
                         "core/extmod/moducryptolib.c"
