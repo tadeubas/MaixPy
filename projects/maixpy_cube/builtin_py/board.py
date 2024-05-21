@@ -33,13 +33,12 @@ config = json.loads("""
             "BUTTON_B": 16,
             "BUTTON_C": 11,
             "I2C_SDA": 31,
-            "I2C_SCL": 30
+            "I2C_SCL": 30,
+            "BACKLIGHT": 17
         },
         "display": {
             "touch": false,
-            "font": [8, 14],
-            "inverted_coordinates": false,
-            "qr_colors": [0, 6342]
+            "font": [8, 14]
         }
     }
 }
