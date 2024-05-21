@@ -35,6 +35,7 @@ config = json.loads("""
     "krux": {
         "pins": {
             "BUTTON_B": 16,
+            "BUTTON_C": 17,
             "TOUCH_IRQ": 22,
             "I2C_SDA": 25,
             "I2C_SCL": 24
