@@ -19,13 +19,15 @@ config = json.loads("""
         "cs": 29
     },
     "board_info": {
-      "BOOT_KEY": 16,
-      "LED_R": 13,
-      "LED_G": 12,
-      "LED_B": 14,
-      "MIC0_WS": 19,
-      "MIC0_DATA": 20,
-      "MIC0_BCK": 18
+        "BOOT_KEY": 16,
+        "CONNEXT_A": 25,
+        "CONNEXT_B": 24,
+        "LED_R": 13,
+        "LED_G": 12,
+        "LED_B": 14,
+        "MIC0_WS": 19,
+        "MIC0_DATA": 20,
+        "MIC0_BCK": 18
     },
     "krux": {
         "pins": {

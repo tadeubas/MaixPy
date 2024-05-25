@@ -21,6 +21,8 @@ config = json.loads("""
     },
     "board_info": {
         "BOOT_KEY": 23,
+        "CONNEXT_A": 7,
+        "CONNEXT_B": 9,
         "LED_R": 14,
         "LED_G": 15,
         "LED_B": 17,
