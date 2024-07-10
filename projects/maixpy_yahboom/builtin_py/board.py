@@ -25,6 +25,8 @@ config = json.loads("""
     },
     "board_info": {
         "BOOT_KEY": 16,
+        "CONNEXT_A": 8,
+        "CONNEXT_B": 6,
         "I2C_SDA": 25,
         "I2C_SCL": 24,
         "SPI_SCLK": 32,
