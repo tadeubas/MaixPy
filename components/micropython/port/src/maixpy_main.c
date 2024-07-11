@@ -622,6 +622,7 @@ soft_reset:
     }
   }
 #endif
+#if MICROPY_ENABLE_COMPILER
   do
   {
     ide_dbg_init();
@@ -666,6 +667,7 @@ soft_reset:
       ide_dbg_on_script_end();
     }
   } while (MP_STATE_PORT(Maix_stdio_uart)->ide_debug_mode);
+#endif
 
 #if MICROPY_PY_THREAD
   mp_thread_deinit();
@@ -747,6 +749,7 @@ int maixpy_main()
 #endif
   return 0;
 }
+#if MICROPY_ENABLE_COMPILER
 void do_str(const char *src, mp_parse_input_kind_t input_kind)
 {
   nlr_buf_t nlr;
@@ -765,6 +768,7 @@ void do_str(const char *src, mp_parse_input_kind_t input_kind)
     mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
   }
 }
+#endif
 
 void nlr_jump_fail(void *val)
 {

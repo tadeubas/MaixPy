@@ -240,7 +240,7 @@ if(CONFIG_COMPONENT_MICROPYTHON_ENABLE)
     list(APPEND MPY_EXTMOD_SRCS 
                         "core/extmod/moductypes.c"
                         "core/extmod/modujson.c"
-                        "core/extmod/moduzlib.c"
+                        "core/extmod/moddeflate.c"
                         "core/extmod/moduheapq.c"
                         "core/extmod/modutimeq.c"
                         "core/extmod/moducryptolib.c"
@@ -580,7 +580,7 @@ if(CONFIG_COMPONENT_MICROPYTHON_ENABLE)
         file(TOUCH "${mpy_frozen_py_dir}/__init__.py")
         list(APPEND frozen_py "${mpy_frozen_py_dir}/__init__.py")
     else()
-        file(GLOB frozen_py "${mpy_frozen_py_dir}/*.py")
+    file(GLOB_RECURSE frozen_py "${mpy_frozen_py_dir}/*.py" "${mpy_frozen_py_dir}/**/*.py")
         if(NOT CONFIG_MAIXPY_BUILTIN_PY_PYE)
             list(REMOVE_ITEM frozen_py "${mpy_frozen_py_dir}/pye_mp.py")
         endif()
@@ -592,17 +592,24 @@ if(CONFIG_COMPONENT_MICROPYTHON_ENABLE)
         endif()
     endif()
     foreach(py ${frozen_py})
-        get_filename_component(py_name ${py} NAME)
-        string(REPLACE ".py" "" py_name ${py_name})
-        string(REPLACE ".py" ".mpy" mpy ${py})
-        set(mpy_path ${mpy_build_mpy_dir}/${py_name}.mpy)
+        get_filename_component(py_name ${py} NAME_WE)
+        get_filename_component(py_rel_path ${py} DIRECTORY)
+        file(RELATIVE_PATH py_rel_path ${mpy_frozen_py_dir} ${py_rel_path})
+        if(py_rel_path STREQUAL "." OR py_rel_path STREQUAL "")
+            set(py_source_path ${py_name}.py)
+        else()
+            set(py_source_path ${py_rel_path}/${py_name}.py)
+        endif()
+        set(mpy_rel_path ${py_rel_path}/${py_name}.mpy)
+        string(REPLACE "/" "_" mpy_c_identifier ${mpy_rel_path})
+        set(mpy_path ${mpy_build_mpy_dir}/${mpy_rel_path})
         list(APPEND frozen_mpy ${mpy_path})
+        get_filename_component(mpy_dir_path ${mpy_path} DIRECTORY)
         add_custom_command(OUTPUT ${mpy_path} 
-                            COMMAND mkdir -p ${mpy_build_mpy_dir}
+                            COMMAND mkdir -p ${mpy_dir_path}
                             DEPENDS ${py}
-                            COMMAND ${mpy_core_dir}/mpy-cross/mpy-cross -o ${mpy_path} -s ${py_name}.py ${py}
+                            COMMAND ${mpy_core_dir}/mpy-cross/mpy-cross -o ${mpy_path} -s ${py_source_path} ${py}
                     )
-        # add_custom_target("mpy_${py_name}_target" DEPENDS ${mpy})
     endforeach()
     add_custom_command(OUTPUT ${MPY_FROZEN_SRC}
                 COMMAND ${python} ${mpy_core_dir}/tools/mpy-tool.py -f -q ${mpy_build_gen_header_dir}/qstrdefs.preprocessed.h ${frozen_mpy} > ${MPY_FROZEN_SRC}

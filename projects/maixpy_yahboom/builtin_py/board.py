@@ -25,6 +25,8 @@ config = json.loads("""
     },
     "board_info": {
         "BOOT_KEY": 16,
+        "CONNEXT_A": 8,
+        "CONNEXT_B": 6,
         "I2C_SDA": 25,
         "I2C_SCL": 24,
         "SPI_SCLK": 32,
@@ -35,15 +37,14 @@ config = json.loads("""
     "krux": {
         "pins": {
             "BUTTON_B": 16,
+            "BUTTON_C": 17,
             "TOUCH_IRQ": 22,
             "I2C_SDA": 25,
             "I2C_SCL": 24
         },
         "display": {
             "touch": true,
-            "font": [8, 16],
-            "inverted_coordinates": false,
-            "qr_colors": [0, 6342]
+            "font": [8, 16]
         }
     }
 }

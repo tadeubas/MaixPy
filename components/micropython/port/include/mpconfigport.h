@@ -56,7 +56,7 @@
 #define MICROPY_OPT_MPZ_BITWISE             (1)
 
 
-#define MICROPY_ENABLE_COMPILER     (1)
+#define MICROPY_ENABLE_COMPILER     (0)
 
 #define MICROPY_QSTR_BYTES_IN_LEN           (1)
 #define MICROPY_QSTR_BYTES_IN_HASH          (1)
@@ -161,9 +161,14 @@ extern const struct _mp_print_t mp_debug_print;
 #define MICROPY_PY_BUILTINS_ROUND_INT       (1)
 #define MICROPY_PY_BUILTINS_TIMEOUTERROR    (1)
 #define MICROPY_PY_ALL_SPECIAL_METHODS      (1)
-#define MICROPY_PY_BUILTINS_COMPILE         (1)
+#if MICROPY_ENABLE_COMPILER
+    #define MICROPY_PY_BUILTINS_COMPILE     (1)
+    #define MICROPY_PY_BUILTINS_EXECFILE    (1)
+#else
+    #define MICROPY_PY_BUILTINS_COMPILE     (0)
+    #define MICROPY_PY_BUILTINS_EXECFILE    (0)
+#endif //MICROPY_ENABLE_COMPILER
 #define MICROPY_PY_BUILTINS_ENUMERATE       (1)
-#define MICROPY_PY_BUILTINS_EXECFILE        (1)
 #define MICROPY_PY_BUILTINS_FILTER          (1)
 #define MICROPY_PY_BUILTINS_REVERSED        (1)
 #define MICROPY_PY_BUILTINS_NOTIMPLEMENTED  (1)
@@ -230,7 +235,9 @@ extern const struct _mp_print_t mp_debug_print;
 
 // extended modules
 #define MICROPY_PY_UCTYPES                  (1)
-#define MICROPY_PY_UZLIB                    (1)
+#define MICROPY_PY_UZLIB                    (0)
+#define MICROPY_PY_DEFLATE                  (1)
+#define MICROPY_PY_DEFLATE_COMPRESS         (1)
 #define MICROPY_PY_UJSON                    (1)
 #if CONFIG_MICROPYTHON_PY_URE_ENABLE
     #define MICROPY_PY_URE                  (1)
@@ -543,7 +550,7 @@ extern const struct _mp_obj_module_t mp_module_touchscreen;
     { MP_OBJ_NEW_QSTR(MP_QSTR_os), (mp_obj_t)&uos_module }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_random), (mp_obj_t)&mp_module_urandom }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_struct), (mp_obj_t)&mp_module_ustruct }, \
-    { MP_OBJ_NEW_QSTR(MP_QSTR_zlib), (mp_obj_t)&mp_module_uzlib }, \
+    { MP_OBJ_NEW_QSTR(MP_QSTR_zlib), (mp_obj_t)&mp_module_deflate }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_io), (mp_obj_t)&mp_module_io }, \
     MICROPYTHON_PY_URE_WEAK_DEF \
     MAIXPY_HASHLIB_WEAK_DEF

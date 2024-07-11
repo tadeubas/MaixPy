@@ -21,6 +21,8 @@ config = json.loads("""
     },
     "board_info": {
         "BOOT_KEY": 23,
+        "CONNEXT_A": 7,
+        "CONNEXT_B": 9,
         "LED_R": 14,
         "LED_G": 15,
         "LED_B": 17,
@@ -55,9 +57,7 @@ config = json.loads("""
         },
         "display": {
             "touch": true,
-            "font": [12, 24],
-            "inverted_coordinates": true,
-            "qr_colors": [0, 6342]
+            "font": [12, 24]
         }
     }
 }
