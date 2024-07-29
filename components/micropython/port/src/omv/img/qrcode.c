@@ -170,7 +170,7 @@ int quirc_count(const struct quirc *q);
 
 /* Extract the QR-code specified by the given index. */
 void quirc_extract(const struct quirc *q, int index,
-                   struct quirc_code *code, float jitter_y);
+                   struct quirc_code *code, float jitter_x, float jitter_y);
 
 /* Decode a QR-code, returning the payload data. */
 quirc_decode_error_t quirc_decode(const struct quirc_code *code,
@@ -205,7 +205,7 @@ quirc_decode_error_t quirc_decode(const struct quirc_code *code,
 #endif
 
 #define QUIRC_MAX_CAPSTONES 32
-#define QUIRC_MAX_GRIDS     8
+#define QUIRC_MAX_GRIDS     1
 
 #define QUIRC_PERSPECTIVE_PARAMS    8
 
@@ -1914,7 +1914,7 @@ void quirc_end(struct quirc *q)
 }
 
 void quirc_extract(const struct quirc *q, int index,
-                   struct quirc_code *code, float jitter_y)
+                   struct quirc_code *code, float jitter_x, float jitter_y)
 {
     const struct quirc_grid *qr = &q->grids[index];
     int y;
@@ -1937,7 +1937,7 @@ void quirc_extract(const struct quirc *q, int index,
         int x;
 
         for (x = 0; x < qr->grid_size; x++) {
-            if (read_cell(q, index, x, y + jitter_y) > 0)
+            if (read_cell(q, index, x + jitter_x, y + jitter_y) > 0)
                 code->cell_bitmap[i >> 3] |= (1 << (i & 7));
 
             i++;
@@ -3013,9 +3013,27 @@ void imlib_find_qrcodes(list_t *out, image_t *ptr, rectangle_t *roi)
         size_t num_jitters = sizeof(offset_jitters) / sizeof(offset_jitters[0]);
         bool found = false;
 
+        /* Consideration on jittering:
+         - Jittering is useful because the QR code may not be perfectly aligned with the grid.
+         - This may happen due to lack of precision on capstones position or due to perspective distortions.
+         - The jittering axis and values were empirically determined.
+         - Further investigation is needed to determine a more robust and neat method to improve decoding.*/
+
+        // Check orientation
+        bool jitter_x_axis = 0;
+        if (controller->grids[i].tpep[0].x > controller->grids[i].tpep[2].x) {
+            // If upside down, don't jitter y axis, jitter x instead.
+            jitter_x_axis = 1;
+        }
+
+
         // Loop through jitters values until QR is successfully decoded.
-        for (size_t jitter_y = 0; jitter_y < num_jitters; jitter_y++) {
-            quirc_extract(controller, i, code, offset_jitters[jitter_y]);
+        for (size_t jitter = 0; jitter < num_jitters; jitter++) {
+            if (jitter_x_axis) {
+                quirc_extract(controller, i, code, offset_jitters[jitter], 0);
+            } else {
+                quirc_extract(controller, i, code, 0, offset_jitters[jitter]);
+            }
             if (quirc_decode(code, data) == QUIRC_SUCCESS) {
                 found = true;
                 break;
