@@ -1,12 +1,6 @@
 
 #include "include/font.h"
 
-#include "assert.h"
-
-#include "printf.h"
-
-#include "vfs_spiffs.h"
-
 static uint8_t ascii[] = {};
 static uint8_t unicode[] = {
 0x01,0x08,
@@ -646,7 +640,7 @@ uint32_t font_utf8_decode_codepoint(uint32_t* state, uint32_t* codep, uint32_t b
   return *state;
 }
 
-int font_utf8_strlen(mp_obj_t str)
+int string_width_px(mp_obj_t str)
 {
   int count = 0;
   const uint8_t *s = mp_obj_str_get_str(str);
@@ -655,6 +649,7 @@ int font_utf8_strlen(mp_obj_t str)
   for (; *s; ++s)
     if (!font_utf8_decode_codepoint(&state, &codepoint, *s))
       count += 1;
+  count *= font_config.width;
   return count;
 }
 
@@ -689,37 +684,21 @@ void imlib_draw_string(image_t *img, int x_off, int y_off, mp_obj_t str, int c) 
   for (; *s; ++s) {
     if (!font_utf8_decode_codepoint(&state, &codepoint, *s)) {
         uint8_t buffer[font_len];
-        
-        switch (font_config.source)
-        {
-            case FileIn:
-                file_seek_raise(font_config.this, codepoint * font_len, 0);
-                read_data_raise(font_config.this, buffer, font_len);
+
+        l = 0;
+        r = total_codepoints - 1;
+        while (l <= r) {
+            m = l + (r - l) / 2;
+            uint16_t byte_index = 2 + m * (2 + font_len);
+            cur_codepoint = (((uint8_t *)font_config.this)[byte_index] << 8) | ((uint8_t *)font_config.this)[byte_index + 1];
+            if (cur_codepoint == codepoint) {
+                memcpy(buffer, &font_config.this[byte_index + 2], font_len);
                 break;
-            case ArrayIn:
-                // printk("%d %p %p %p", font_len, buffer, font_config.this, &font_config.this[codepoint * font_len]);
-                // memcpy(buffer, &font_config.this[codepoint * font_len], font_len);
-                sys_spiffs_read(font_config.this + codepoint * font_len, font_len, buffer);
-                break;
-            case BuildIn:
-                // printk("%d %p %p %d", font_len, buffer, font_config.this, &font_config.this[codepoint * font_len]);
-                l = 0;
-                r = total_codepoints - 1;
-                while (l <= r) {
-                    m = l + (r - l) / 2;
-                    cur_codepoint = (((uint8_t *)font_config.this)[2 + m * (2 + font_len)] << 8) | ((uint8_t *)font_config.this)[2 + m * (2 + font_len) + 1];
-                    if (cur_codepoint == codepoint) {
-                        memcpy(buffer, &font_config.this[2 + m * (2 + font_len) + 2], font_len);
-                        break;
-                    }
-                    if (cur_codepoint < codepoint)
-                        l = m + 1;
-                    else
-                        r = m - 1;
-                }
-                break;
-            default:
-                break;
+            }
+            if (cur_codepoint < codepoint)
+                l = m + 1;
+            else
+                r = m - 1;
         }
         const uint8_t *font = buffer;
         imlib_draw_font(img, x_off, y_off, c, font_config.high, font_byte_width * 8, font);
