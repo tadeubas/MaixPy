@@ -546,11 +546,11 @@ struct font
   8, 16, Unicode, BuildIn, unicode
 };
 
-static inline void font_init(uint8_t width, uint8_t high, uint8_t index, uint8_t source_type, void *font_offset)
-{
-  struct font tmp = { width, high, index, source_type, font_offset};
-  font_config = tmp;
-}
+// static inline void font_init(uint8_t width, uint8_t high, uint8_t index, uint8_t source_type, void *font_offset)
+// {
+//   struct font tmp = { width, high, index, source_type, font_offset};
+//   font_config = tmp;
+// }
 
 #include "vfs_wrapper.h"
 #include "nlr.h"
@@ -569,7 +569,7 @@ void font_free()
     case GB2312:
     case ASCII:
     default:
-      font_init(8, 12, ASCII, BuildIn, ascii);
+      // font_init(8, 12, ASCII, BuildIn, ascii);
       break;
   }
 }
@@ -579,19 +579,19 @@ void font_load(uint8_t index, uint8_t width, uint8_t high, uint8_t source_type, 
     switch (index)
     {
     case UTF8:
-        if (src_addr == NULL)
-        {
-            font_init(8, 12, ASCII, BuildIn, ascii);
-            break;
-        }
-        font_init(width, high, UTF8, source_type, src_addr);
+        // if (src_addr == NULL)
+        // {
+        //     font_init(8, 12, ASCII, BuildIn, ascii);
+        //     break;
+        // }
+        // font_init(width, high, UTF8, source_type, src_addr);
     break;
     default:
     case Unicode:
     case GBK:
     case GB2312:
     case ASCII:
-        font_init(8, 12, ASCII, BuildIn, ascii);
+        // font_init(8, 12, ASCII, BuildIn, ascii);
     break;
     }
 }
