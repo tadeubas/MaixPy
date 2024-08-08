@@ -938,7 +938,7 @@ int string_width_px(mp_obj_t str)
   uint32_t state = 0;
   for (; *s; ++s)
     if (!font_utf8_decode_codepoint(&state, &codepoint, *s))
-      if (codepoint > KOREAN_CODEPOINT_MIN && codepoint < KOREAN_CODEPOINT_MAX)
+      if (codepoint >= KOREAN_CODEPOINT_MIN && codepoint <= KOREAN_CODEPOINT_MAX)
         count += font_config_ko.width;
       else
         count += font_config.width;
@@ -983,7 +983,7 @@ void imlib_draw_string(image_t *img, int x_off, int y_off, mp_obj_t str, int c) 
 
   for (; *s; ++s) {
     if (!font_utf8_decode_codepoint(&state, &codepoint, *s)) {
-      if (codepoint > KOREAN_CODEPOINT_MIN && codepoint < KOREAN_CODEPOINT_MAX) {
+      if (codepoint >= KOREAN_CODEPOINT_MIN && codepoint <= KOREAN_CODEPOINT_MAX) {
         // Korean
         uint8_t buffer[font_len_ko];
         l = 0;
