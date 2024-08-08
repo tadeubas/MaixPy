@@ -552,11 +552,31 @@ struct font
   8, 14, Unicode, BuildIn, unicode
 };
 
-static inline void font_init(uint8_t width, uint8_t high, uint8_t index, uint8_t source_type, void *font_offset)
+
+static uint8_t unicode_ko[] = {
+0x00,0x01,
+0x00,0x0A,
+0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+};
+
+struct font_ko
 {
-  struct font tmp = { width, high, index, source_type, font_offset};
-  font_config = tmp;
-}
+  /* data */
+  uint8_t width;
+  uint8_t high;
+  uint8_t index;
+  uint8_t source;
+  void *this;
+} font_config_ko = {
+  14, 14, Unicode, BuildIn, unicode_ko
+};
+
+// static inline void font_init(uint8_t width, uint8_t high, uint8_t index, uint8_t source_type, void *font_offset)
+// {
+//   struct font tmp = { width, high, index, source_type, font_offset};
+//   font_config = tmp;
+// }
 
 #include "vfs_wrapper.h"
 #include "nlr.h"
@@ -571,11 +591,15 @@ void font_free()
         {
             file_close(font_config.this);
         }
+        if (font_config_ko.source == FileIn)
+        {
+            file_close(font_config_ko.this);
+        }
     case GBK:
     case GB2312:
     case ASCII:
     default:
-      font_init(8, 12, ASCII, BuildIn, ascii);
+      // font_init(8, 12, ASCII, BuildIn, ascii);
       break;
   }
 }
@@ -585,31 +609,26 @@ void font_load(uint8_t index, uint8_t width, uint8_t high, uint8_t source_type, 
     switch (index)
     {
     case UTF8:
-        if (src_addr == NULL)
-        {
-            font_init(8, 12, ASCII, BuildIn, ascii);
-            break;
-        }
-        font_init(width, high, UTF8, source_type, src_addr);
+        // if (src_addr == NULL)
+        // {
+        //     font_init(8, 12, ASCII, BuildIn, ascii);
+        //     break;
+        // }
+        // font_init(width, high, UTF8, source_type, src_addr);
     break;
     default:
     case Unicode:
     case GBK:
     case GB2312:
     case ASCII:
-        font_init(8, 12, ASCII, BuildIn, ascii);
+        // font_init(8, 12, ASCII, BuildIn, ascii);
     break;
     }
 }
 
-int font_width()
-{
-	return font_config.width;
-}
-
 int font_height()
 {
-	return font_config.high;
+	return font_config_ko.high;
 }
 
 // Copyright (c) 2008-2009 Bjoern Hoehrmann <bjoern@hoehrmann.de>
@@ -646,7 +665,7 @@ uint32_t font_utf8_decode_codepoint(uint32_t* state, uint32_t* codep, uint32_t b
   return *state;
 }
 
-int font_utf8_strlen(mp_obj_t str)
+int string_width_px(mp_obj_t str)
 {
   int count = 0;
   const uint8_t *s = mp_obj_str_get_str(str);
@@ -654,7 +673,10 @@ int font_utf8_strlen(mp_obj_t str)
   uint32_t state = 0;
   for (; *s; ++s)
     if (!font_utf8_decode_codepoint(&state, &codepoint, *s))
-      count += 1;
+      if (codepoint > KOREAN_CODEPOINT_MIN && codepoint < KOREAN_CODEPOINT_MAX)
+        count += font_config_ko.width;
+      else
+        count += font_config.width;
   return count;
 }
 
@@ -675,12 +697,20 @@ void imlib_draw_font(image_t *img, int x_off, int y_off, int c, uint8_t font_h, 
 }
 
 void imlib_draw_string(image_t *img, int x_off, int y_off, mp_obj_t str, int c) {
+
+  // standard font attributes
   const uint8_t font_byte_width = (font_config.width + 7)/8;
   const uint8_t font_len = font_byte_width * font_config.high;
+  uint16_t total_codepoints = (((uint8_t *)font_config.this)[0] << 8) | ((uint8_t *)font_config.this)[1];
+
+  // korean font attributes
+  const uint8_t font_byte_width_ko = (font_config_ko.width + 7)/8;
+  const uint8_t font_len_ko = font_byte_width_ko * font_config_ko.high;
+  uint16_t total_codepoints_ko = (((uint8_t *)font_config_ko.this)[0] << 8) | ((uint8_t *)font_config_ko.this)[1];
+
   const uint8_t *s = mp_obj_str_get_str(str);
   uint32_t codepoint;
   uint32_t state = 0;
-  uint16_t total_codepoints = (((uint8_t *)font_config.this)[0] << 8) | ((uint8_t *)font_config.this)[1];
   uint16_t cur_codepoint;
   int l;
   int r;
@@ -688,42 +718,49 @@ void imlib_draw_string(image_t *img, int x_off, int y_off, mp_obj_t str, int c) 
 
   for (; *s; ++s) {
     if (!font_utf8_decode_codepoint(&state, &codepoint, *s)) {
+      if (codepoint > KOREAN_CODEPOINT_MIN && codepoint < KOREAN_CODEPOINT_MAX) {
+        // Korean
+        uint8_t buffer[font_len_ko];
+        l = 0;
+        r = total_codepoints_ko - 1;
+        while (l <= r) {
+            m = l + (r - l) / 2;
+            uint16_t byte_index = 2 + m * (2 + font_len_ko);
+            cur_codepoint = (((uint8_t *)font_config_ko.this)[byte_index] << 8) | ((uint8_t *)font_config_ko.this)[byte_index + 1];
+            if (cur_codepoint == codepoint) {
+                memcpy(buffer, &font_config_ko.this[byte_index + 2], font_len_ko);
+                break;
+            }
+            if (cur_codepoint < codepoint)
+                l = m + 1;
+            else
+                r = m - 1;
+        }
+        const uint8_t *font = buffer;
+        imlib_draw_font(img, x_off, y_off, c, font_config_ko.high, font_byte_width_ko * 8, font);
+        x_off += font_config_ko.width;
+      } else {
+        // Standard
         uint8_t buffer[font_len];
-        
-        switch (font_config.source)
-        {
-            case FileIn:
-                file_seek_raise(font_config.this, codepoint * font_len, 0);
-                read_data_raise(font_config.this, buffer, font_len);
+        l = 0;
+        r = total_codepoints - 1;
+        while (l <= r) {
+            m = l + (r - l) / 2;
+            uint16_t byte_index = 2 + m * (2 + font_len);
+            cur_codepoint = (((uint8_t *)font_config.this)[byte_index] << 8) | ((uint8_t *)font_config.this)[byte_index + 1];
+            if (cur_codepoint == codepoint) {
+                memcpy(buffer, &font_config.this[byte_index + 2], font_len);
                 break;
-            case ArrayIn:
-                // printk("%d %p %p %p", font_len, buffer, font_config.this, &font_config.this[codepoint * font_len]);
-                // memcpy(buffer, &font_config.this[codepoint * font_len], font_len);
-                sys_spiffs_read(font_config.this + codepoint * font_len, font_len, buffer);
-                break;
-            case BuildIn:
-                // printk("%d %p %p %d", font_len, buffer, font_config.this, &font_config.this[codepoint * font_len]);
-                l = 0;
-                r = total_codepoints - 1;
-                while (l <= r) {
-                    m = l + (r - l) / 2;
-                    cur_codepoint = (((uint8_t *)font_config.this)[2 + m * (2 + font_len)] << 8) | ((uint8_t *)font_config.this)[2 + m * (2 + font_len) + 1];
-                    if (cur_codepoint == codepoint) {
-                        memcpy(buffer, &font_config.this[2 + m * (2 + font_len) + 2], font_len);
-                        break;
-                    }
-                    if (cur_codepoint < codepoint)
-                        l = m + 1;
-                    else
-                        r = m - 1;
-                }
-                break;
-            default:
-                break;
+            }
+            if (cur_codepoint < codepoint)
+                l = m + 1;
+            else
+                r = m - 1;
         }
         const uint8_t *font = buffer;
         imlib_draw_font(img, x_off, y_off, c, font_config.high, font_byte_width * 8, font);
         x_off += font_config.width;
+      }
     }
   }
 }
