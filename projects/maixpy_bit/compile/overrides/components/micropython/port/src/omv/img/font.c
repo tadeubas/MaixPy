@@ -1585,6 +1585,18 @@ int string_width_px(mp_obj_t str)
   return count;
 }
 
+int string_has_korean(mp_obj_t str)
+{
+  const uint8_t *s = mp_obj_str_get_str(str);
+  uint32_t codepoint;
+  uint32_t state = 0;
+  for (; *s; ++s)
+    if (!font_utf8_decode_codepoint(&state, &codepoint, *s))
+      if (codepoint >= KOREAN_CODEPOINT_MIN && codepoint <= KOREAN_CODEPOINT_MAX)
+        return 1;
+  return 0;
+}
+
 void imlib_draw_font(image_t *img, int x_off, int y_off, int c, uint8_t font_h, uint8_t font_w, const uint8_t *font)
 {
     for (uint8_t y = 0, yy = font_h; y < yy; y++) {
