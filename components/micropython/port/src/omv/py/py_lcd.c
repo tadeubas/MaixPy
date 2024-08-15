@@ -648,10 +648,10 @@ STATIC mp_obj_t py_lcd_string_width_px(size_t n_args, const mp_obj_t *args)
     return mp_obj_new_int(string_width_px(args[0]));
 }
 
-extern int string_has_korean(mp_obj_t str);
-STATIC mp_obj_t py_lcd_string_has_korean(size_t n_args, const mp_obj_t *args)
+extern int string_has_wide_glyph(mp_obj_t str);
+STATIC mp_obj_t py_lcd_string_has_wide_glyph(size_t n_args, const mp_obj_t *args)
 {
-    return mp_obj_new_int(string_has_korean(args[0]));
+    return mp_obj_new_int(string_has_wide_glyph(args[0]));
 }
 
 extern int font_height();
@@ -1132,7 +1132,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(py_lcd_mirror_obj, 0, 1, py_lcd_mirro
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(py_lcd_bgr_to_rgb_obj, 0, 1, py_lcd_bgr_to_rgb);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(py_lcd_draw_string_obj, 3, 5, py_lcd_draw_string);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(py_lcd_string_width_px_obj, 1, 1, py_lcd_string_width_px);
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(py_lcd_string_has_korean_obj, 1, 1, py_lcd_string_has_korean);
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(py_lcd_string_has_wide_glyph_obj, 1, 1, py_lcd_string_has_wide_glyph);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(py_lcd_fill_rectangle_obj, 3, 6, py_lcd_fill_rectangle);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(py_lcd_draw_line_obj, 3, 5, py_lcd_draw_line);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(py_lcd_draw_outline_obj, 3, 5, mcu_lcd_draw_outline);
@@ -1159,7 +1159,7 @@ static const mp_map_elem_t globals_dict_table[] = {
     {MP_OBJ_NEW_QSTR(MP_QSTR_bgr_to_rgb), (mp_obj_t)&py_lcd_bgr_to_rgb_obj},
     {MP_OBJ_NEW_QSTR(MP_QSTR_draw_string), (mp_obj_t)&py_lcd_draw_string_obj},
     {MP_OBJ_NEW_QSTR(MP_QSTR_string_width_px), (mp_obj_t)&py_lcd_string_width_px_obj},
-    {MP_OBJ_NEW_QSTR(MP_QSTR_string_has_korean), (mp_obj_t)&py_lcd_string_has_korean_obj},
+    {MP_OBJ_NEW_QSTR(MP_QSTR_string_has_wide_glyph), (mp_obj_t)&py_lcd_string_has_wide_glyph_obj},
     {MP_OBJ_NEW_QSTR(MP_QSTR_fill_rectangle), (mp_obj_t)&py_lcd_fill_rectangle_obj},
     {MP_OBJ_NEW_QSTR(MP_QSTR_draw_line), (mp_obj_t)&py_lcd_draw_line_obj},
     {MP_OBJ_NEW_QSTR(MP_QSTR_draw_outline), (mp_obj_t)&py_lcd_draw_outline_obj},
