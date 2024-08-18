@@ -58,7 +58,7 @@ config = json.loads("""
         "display": {
             "touch": true,
             "font": [12, 24],
-            "font_ko": [24, 24]
+            "font_wide": [24, 24]
         }
     }
 }
