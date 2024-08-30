@@ -54,7 +54,7 @@ config = json.loads("""
             "TOUCH_IRQ": 41,
             "I2C_SDA": 19,
             "I2C_SCL": 18,
-            "BACKLIGHT", 23
+            "BACKLIGHT": 23
         },
         "display": {
             "touch": true,
