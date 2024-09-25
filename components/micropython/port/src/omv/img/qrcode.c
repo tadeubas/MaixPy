@@ -1,11 +1,18 @@
-/* This file is part of the OpenMV project.
- * Copyright (c) 2013-2017 Ibrahim Abdelkader <iabdalkader@openmv.io> & Kwabena W. Agyeman <kwagyeman@openmv.io>
+/*
+ * This file is part of the OpenMV project.
+ *
+ * Copyright (C) 2010-2012 Daniel Beer <dlbeer@gmail.com>
+ * Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+ * Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
+ *
  * This work is licensed under the MIT license, see the file LICENSE for details.
+ *
+ * QR-code recognition library.
  */
-
 #include "imlib.h"
-
 #ifdef IMLIB_ENABLE_QRCODES
+
+// *INDENT-OFF*
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////// "quirc.h"
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,7 +70,7 @@ void quirc_end(struct quirc *q);
 struct quirc_point {
     int x;
     int y;
-}__attribute__((aligned(8)));
+};
 
 /* This enum describes the various decoder errors which may occur. */
 typedef enum {
@@ -130,7 +137,7 @@ struct quirc_code {
      */
     int                 size;
     uint8_t             cell_bitmap[QUIRC_MAX_BITMAP];
-}__attribute__((aligned(8)));
+};
 
 /* This structure holds the decoded QR-code data */
 struct quirc_data {
@@ -154,7 +161,7 @@ struct quirc_data {
 
     /* ECI assignment number */
     uint32_t    eci;
-}__attribute__((aligned(8)));
+};
 
 /* Return the number of QR-codes identified in the last processed
  * image.
@@ -163,14 +170,11 @@ int quirc_count(const struct quirc *q);
 
 /* Extract the QR-code specified by the given index. */
 void quirc_extract(const struct quirc *q, int index,
-                   struct quirc_code *code);
+                   struct quirc_code *code, float jitter_x, float jitter_y);
 
 /* Decode a QR-code, returning the payload data. */
 quirc_decode_error_t quirc_decode(const struct quirc_code *code,
                                   struct quirc_data *data);
-
-/* Flip a QR-code according to optional mirror feature of ISO 18004:2015 */
-void quirc_flip(struct quirc_code *code);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////// "quirc_internal.h"
@@ -197,11 +201,11 @@ void quirc_flip(struct quirc_code *code);
 #define QUIRC_PIXEL_REGION  2
 
 #ifndef QUIRC_MAX_REGIONS
-#define QUIRC_MAX_REGIONS   65534
+#define QUIRC_MAX_REGIONS   9409  /* Max Version 20 */
 #endif
 
 #define QUIRC_MAX_CAPSTONES 32
-#define QUIRC_MAX_GRIDS     8
+#define QUIRC_MAX_GRIDS     1
 
 #define QUIRC_PERSPECTIVE_PARAMS    8
 
@@ -217,7 +221,7 @@ struct quirc_region {
     struct quirc_point  seed;
     int                 count;
     int                 capstone;
-}__attribute__((aligned(8)));
+};
 
 struct quirc_capstone {
     int                 ring;
@@ -228,7 +232,7 @@ struct quirc_capstone {
     float               c[QUIRC_PERSPECTIVE_PARAMS];
 
     int                 qr_grid;
-}__attribute__((aligned(8)));
+};
 
 struct quirc_grid {
     /* Capstone indices */
@@ -246,7 +250,7 @@ struct quirc_grid {
     /* Grid size and perspective transform */
     int                 grid_size;
     float               c[QUIRC_PERSPECTIVE_PARAMS];
-}__attribute__((aligned(8)));
+};
 
 struct quirc {
     uint8_t                 *image;
@@ -262,7 +266,7 @@ struct quirc {
 
     int                     num_grids;
     struct quirc_grid       grids[QUIRC_MAX_GRIDS];
-}__attribute__((aligned(8)));
+};
 
 /************************************************************************
  * QR-code version information database
@@ -275,13 +279,13 @@ struct quirc_rs_params {
     uint8_t bs; /* Small block size */
     uint8_t dw; /* Small data words */
     uint8_t ns; /* Number of small blocks */
-}__attribute__((aligned(8)));
+};
 
 struct quirc_version_info {
     uint16_t                data_bytes;
     uint8_t                 apat[QUIRC_MAX_ALIGNMENT];
     struct quirc_rs_params  ecc[4];
-}__attribute__((aligned(8)));
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////// "version_db.c"
@@ -834,164 +838,188 @@ typedef void (*span_func_t)(void *user_data, int y, int left, int right);
 typedef struct xylf
 {
     int16_t x, y, l, r;
-}__attribute__((aligned(8)))
+}
 xylf_t;
 
-//计算该区域的面积，from是像素颜色，to是区块标号，user_data是申请的区块结构体，func是计算面积的函数
+static void lifo_enqueue_fast(lifo_t *ptr, xylf_t *data)
+{
+    *((xylf_t *)(ptr->data + (ptr->len * ptr->data_len))) = *data;
+    ptr->len += 1;
+}
+
+static void lifo_dequeue_fast(lifo_t *ptr, xylf_t *data)
+{
+    ptr->len -= 1;
+    *data = *((xylf_t *)(ptr->data + (ptr->len * ptr->data_len)));
+}
+
 static void flood_fill_seed(struct quirc *q, int x, int y, int from, int to,
                             span_func_t func, void *user_data,
                             int depth)
 {
     (void) depth; // unused
+    uint8_t from8 = from, to8 = to;
 
     lifo_t lifo;
     size_t lifo_len;
-    lifo_alloc_all(&lifo, &lifo_len, sizeof(xylf_t));	
-	//late in first out. 申请xylf_t的lifo，一次申请完，长度存储在lifo_len中
+    lifo_alloc_all(&lifo, &lifo_len, sizeof(xylf_t));
 
-    for(;;) {
+    for (;;) {
         int left = x;
         int right = x;
-        int i;
-        quirc_pixel_t *row = q->pixels + y * q->w;  //行起始地址
-		//查找左右边界
-        while (left > 0 && row[left - 1] == from)
+        quirc_pixel_t *row = q->pixels + y * q->w;
+
+        // Expand to the left
+        while (left > 0 && row[left - 1] == from8)
             left--;
 
-        while (right < q->w - 1 && row[right + 1] == from)
+        // Expand to the right
+        while (right < q->w - 1 && row[right + 1] == from8)
             right++;
 
-        /* Fill the extent 对应像素标记为区块号*/
-        for (i = left; i <= right; i++)
-            row[i] = to;
-		//累加区域内的像素点数作为面积
+        // Fill the extent
+        for (int i = left; i <= right; i++)
+            row[i] = to8;
+
         if (func)
             func(user_data, y, left, right);
 
-        for(;;) {
-            if (lifo_size(&lifo) < lifo_len) {  //栈中的数量
-                /* Seed new flood-fills */
-                if (y > 0) {  //查找上一行有没有在同一区域的点
+        // Process rows above and below
+        for (;;) {
+            bool recurse = false;
+
+            if (lifo.len < lifo_len) {
+                // Seed new flood-fills for the row above
+                if (y > 0) {
                     row = q->pixels + (y - 1) * q->w;
-					
-                    bool recurse = false;
-                    for (i = left; i <= right; i++)
-                        if (row[i] == from) {  //相同区域，则入栈原来的区块
-                            xylf_t context;
-                            context.x = x;
-                            context.y = y;
-                            context.l = left;
-                            context.r = right;
-                            lifo_enqueue(&lifo, &context);
-							//mp_printf(&mp_plat_print, "#x=%x,y=%d;x1=%d,y1=%d\n",x,y,i,y-1);
+                    for (int i = left; i <= right; i++) {
+                        if (row[i] == from8) {
+                            xylf_t context = {x, y, left, right};
+                            lifo_enqueue_fast(&lifo, &context);
                             x = i;
                             y = y - 1;
                             recurse = true;
                             break;
                         }
-                    if (recurse)
-                        break;
+                    }
                 }
-				//查找下一行有没有在同一区域的点
-                if (y < q->h - 1) {
-                    row = q->pixels + (y + 1) * q->w;
 
-                    bool recurse = false;
-                    for (i = left; i <= right; i++)
-                        if (row[i] == from) {
-                            xylf_t context;
-                            context.x = x;
-                            context.y = y;
-                            context.l = left;
-                            context.r = right;
-                            lifo_enqueue(&lifo, &context);
-							//mp_printf(&mp_plat_print, "#x=%x,y=%d;x1=%d,y1=%d\n",x,y,i,y+1);
+                // Seed new flood-fills for the row below
+                if (!recurse && y < q->h - 1) {
+                    row = q->pixels + (y + 1) * q->w;
+                    for (int i = left; i <= right; i++) {
+                        if (row[i] == from8) {
+                            xylf_t context = {x, y, left, right};
+                            lifo_enqueue_fast(&lifo, &context);
                             x = i;
                             y = y + 1;
                             recurse = true;
                             break;
                         }
-                    if (recurse)
-                        break;
+                    }
                 }
             }
 
-            if (!lifo_size(&lifo)) {
-                lifo_free(&lifo);	//如果最起始为止就没找到，那么返回
-                return;
+            if (!recurse) {
+                if (!lifo.len) {
+                    lifo_free(&lifo);
+                    return;
+                }
+
+                xylf_t context;
+                lifo_dequeue_fast(&lifo, &context);
+                x = context.x;
+                y = context.y;
+                left = context.l;
+                right = context.r;
+            } else {
+                break;
             }
-			//本次迭代，往上，往下找边界（相同颜色像素点），直到找不到为止
-			//找到边界后，出栈上层像素点，回退回去
-            xylf_t context;
-            lifo_dequeue(&lifo, &context);  //这里存疑，如果都没有的话，dequeue就会反向溢出吧。。
-            x = context.x;
-            y = context.y;
-            left = context.l;
-            right = context.r;
-			//mp_printf(&mp_plat_print, "#deq: x=%x,y=%d\n",x,y);
-        }	//找到相同from，break到这外面
+        }
     }
 }
 
+
 /************************************************************************
- * Adaptive thresholding
+ * Thresholding
  */
 
-#define THRESHOLD_S_MIN 1
-#define THRESHOLD_S_DEN 8
-#define THRESHOLD_T     5
+static uint8_t otsu_threshold(uint16_t *histogram, uint32_t total) {
+    uint32_t sum = 0;
+    for (uint16_t i = 0; i < 256; i++) {
+        sum += i * histogram[i];
+    }
+
+    uint32_t sumB = 0;
+    uint32_t wB = 0;
+    uint32_t wF = 0;
+
+    float varMax = 0;
+    uint8_t threshold = 0;
+
+    for (uint16_t i = 0; i < 256; i++) {
+        wB += histogram[i];
+        if (wB == 0) continue;
+        wF = total - wB;
+        if (wF == 0) break;
+
+        sumB += i * histogram[i];
+        float mB = (float)sumB / wB;
+        float mF = (float)(sum - sumB) / wF;
+
+        float varBetween = (float)wB * (float)wF * (mB - mF) * (mB - mF);
+        if (varBetween > varMax) {
+            varMax = varBetween;
+            threshold = i;
+        }
+    }
+
+    return threshold;
+}
+
+#define THRESHOLD_BIAS 0
+#define HISTOGRAM_MAX 65535 // Truncate the histogram at 16-bit
+#define IGNORE_PERCENT 20
 
 static void threshold(struct quirc *q)
 {
-    int x, y;
-    int avg_w = 0;
-    int avg_u = 0;
-    int threshold_s = q->w / THRESHOLD_S_DEN;
+    uint16_t width = q->w;
+    uint16_t height = q->h;
     quirc_pixel_t *row = q->pixels;
 
-    /*
-     * Ensure a sane, non-zero value for threshold_s.
-     *
-     * threshold_s can be zero if the image width is small. We need to avoid
-     * SIGFPE as it will be used as divisor.
-     */
-    if (threshold_s < THRESHOLD_S_MIN)
-        threshold_s = THRESHOLD_S_MIN;
+    // Calculate the frame size to ignore
+    uint16_t frame_x = (uint16_t)(width * IGNORE_PERCENT / 100);
+    uint16_t frame_y = (uint16_t)(height * IGNORE_PERCENT / 100);
 
-    for (y = 0; y < q->h; y++) {
-        int row_average[q->w];
+    // Calculate the effective dimensions to process
+    uint16_t start_x = frame_x;
+    uint16_t end_x = width - frame_x;
+    uint16_t start_y = frame_y;
+    uint16_t end_y = height - frame_y;
 
-        memset(row_average, 0, sizeof(row_average));
+    // Allocate and initialize histogram
+    uint16_t histogram[256] = {0};
 
-        for (x = 0; x < q->w; x++) {
-            int w, u;
-
-            if (y & 1) {
-                w = x;
-                u = q->w - 1 - x;
-            } else {
-                w = q->w - 1 - x;
-                u = x;
+    // Calculate histogram for the central part of the image
+    for (uint16_t y = start_y; y < end_y; y++) {
+        for (uint16_t x = start_x; x < end_x; x++) {
+            if (histogram[row[y * width + x]] < HISTOGRAM_MAX) {
+                histogram[row[y * width + x]]++;
             }
-
-            avg_w = (avg_w * (threshold_s - 1)) /
-                threshold_s + row[w];
-            avg_u = (avg_u * (threshold_s - 1)) /
-                threshold_s + row[u];
-
-            row_average[w] += avg_w;
-            row_average[u] += avg_u;
         }
+    }
 
-        for (x = 0; x < q->w; x++) {
-            if (row[x] < row_average[x] *
-                (100 - THRESHOLD_T) / (200 * threshold_s))
-                row[x] = QUIRC_PIXEL_BLACK;
+    uint32_t total = (end_x - start_x) * (end_y - start_y);
+    uint8_t o_threshold = otsu_threshold(histogram, total);
+
+    // Apply threshold to binarize the image
+    for (uint16_t y = 0; y < height; y++) {
+        for (uint16_t x = 0; x < width; x++) {
+            if (row[y * width + x] < o_threshold)
+                row[y * width + x] = QUIRC_PIXEL_BLACK;
             else
-                row[x] = QUIRC_PIXEL_WHITE;
+                row[y * width + x] = QUIRC_PIXEL_WHITE;
         }
-
-        row += q->w;
     }
 }
 
@@ -1001,7 +1029,7 @@ static void area_count(void *user_data, int y, int left, int right)
 }
 
 static int region_code(struct quirc *q, int x, int y)
-{	//region指的是QRcode的区域，成员为区域的坐标，像素面积，是否顶点
+{
     int pixel;
     struct quirc_region *box;
     int region;
@@ -1010,7 +1038,7 @@ static int region_code(struct quirc *q, int x, int y)
         return -1;
 
     pixel = q->pixels[y * q->w + x];
-	//预先判断非正常的像素情况，退出
+
     if (pixel >= QUIRC_PIXEL_REGION)
         return pixel;
 
@@ -1019,7 +1047,7 @@ static int region_code(struct quirc *q, int x, int y)
 
     if (q->num_regions >= QUIRC_MAX_REGIONS)
         return -1;
-	//新建一个区域
+
     region = q->num_regions;
     box = &q->regions[q->num_regions++];
 
@@ -1028,7 +1056,7 @@ static int region_code(struct quirc *q, int x, int y)
     box->seed.x = x;
     box->seed.y = y;
     box->capstone = -1;
-	//计算该区域的面积
+
     flood_fill_seed(q, x, y, pixel, region, area_count, box, 0);
 
     return region;
@@ -1039,7 +1067,7 @@ struct polygon_score_data {
 
     int                 scores[4];
     struct quirc_point  *corners;
-}__attribute__((aligned(8)));
+};
 
 static void find_one_corner(void *user_data, int y, int left, int right)
 {
@@ -1151,74 +1179,85 @@ static void record_capstone(struct quirc *q, int ring, int stone)
 
 static void test_capstone(struct quirc *q, int x, int y, int *pb)
 {
-    int ring_right = region_code(q, x - pb[4], y);   //x-pb[4]是标记环右边的左侧
-    int stone = region_code(q, x - pb[4] - pb[3] - pb[2], y); //实心点左侧
-    int ring_left = region_code(q, x-pb[4]-pb[3]-pb[2]-pb[1]-pb[0], y);  //环左侧
-    struct quirc_region *stone_reg;
-    struct quirc_region *ring_reg;
-    int ratio;
-	//以下检测顶点标记是否符合规范，环称为ring，中间称为stone
-    if (ring_left < 0 || ring_right < 0 || stone < 0)
+    uint16_t ring_right_x = x - pb[4];
+    uint16_t ring_left_x = x - pb[4] - pb[3] - pb[2] - pb[1] - pb[0];
+    uint16_t stone_x = x - pb[4] - pb[3] - pb[2];
+    int ring_right = region_code(q, ring_right_x, y);
+    int ring_left = region_code(q, ring_left_x, y);
+
+    if (ring_left < 0 || ring_right < 0)
         return;
 
-    /* Left and ring of ring should be connected */
+    /* Left and right of ring should be connected */
     if (ring_left != ring_right)
         return;
+
+    int stone = region_code(q, stone_x, y);
+    if (stone < 0)
+       return;
 
     /* Ring should be disconnected from stone */
     if (ring_left == stone)
         return;
 
-    stone_reg = &q->regions[stone];
-    ring_reg = &q->regions[ring_left];
+    struct quirc_region *stone_reg = &q->regions[stone];
+    struct quirc_region *ring_reg = &q->regions[ring_left];
 
     /* Already detected */
     if (stone_reg->capstone >= 0 || ring_reg->capstone >= 0)
         return;
 
-    /* Ratio should ideally be 37.5 中间实心点占面积比例应该在37.5%左右*/
-    ratio = stone_reg->count * 100 / ring_reg->count;
+    /* Ratio should ideally be 37.5 */
+    int ratio = stone_reg->count * 100 / ring_reg->count;
     if (ratio < 10 || ratio > 70)
         return;
-	
+
     record_capstone(q, ring_left, stone);
 }
 
 static void finder_scan(struct quirc *q, int y)
 {
+    static const int check[5] = {1, 1, 3, 1, 1};
     quirc_pixel_t *row = q->pixels + y * q->w;
     int x;
-    int last_color = 0;
-    int run_length = 0;
+    uint8_t color, last_color;
+    int run_length = 1;
     int run_count = 0;
-    int pb[5];  //means QRcode's pixel width
+    int pb[5];
 
     memset(pb, 0, sizeof(pb));
-    for (x = 0; x < q->w; x++) {
-        int color = row[x] ? 1 : 0;
+    last_color = row[0];
+    for (x = 1; x < q->w; x++) {
+        color = row[x];
 
-        if (x && color != last_color) {  // color is different
-            memmove(pb, pb + 1, sizeof(pb[0]) * 4);  //left move in one data
-            pb[4] = run_length;  //run how many pix to get different color
+        if (color != last_color) {
+            // Shift the pb array
+            for (int i = 0; i < 4; i++) {
+                pb[i] = pb[i + 1];
+            }
+            pb[4] = run_length;
             run_length = 0;
-            run_count++;    //get more than 5 time color jump
+            run_count++;
 
-            if (!color && run_count >= 5) {  // find the marker of QRcode(three corner's marker)
-                static int check[5] = {1, 1, 3, 1, 1};  
+            if (!color && run_count >= 5) {
                 int avg, err;
                 int i;
                 int ok = 1;
 
+                // Calculate average and error margin
                 avg = (pb[0] + pb[1] + pb[3] + pb[4]) / 4;
-                err = avg * 3 / 4;
+                err = (avg * 3) / 4;
 
-                for (i = 0; i < 5; i++)
-                    if (pb[i] < check[i] * avg - err ||
-                        pb[i] > check[i] * avg + err)
-                        ok = 0;  
+                for (i = 0; i < 5; i++) {
+                    if (pb[i] < check[i] * avg - err || pb[i] > check[i] * avg + err) {
+                        ok = 0;
+                        break;
+                    }
+                }
 
-                if (ok)
+                if (ok) {
                     test_capstone(q, x, y, pb);
+                }
             }
         }
 
@@ -1432,7 +1471,7 @@ static int measure_timing_pattern(struct quirc *q, int index)
  * transform. Returns +/- 1 for black/white, 0 for cells which are
  * out of image bounds.
  */
-static int read_cell(const struct quirc *q, int index, int x, int y)
+static int read_cell(const struct quirc *q, int index, float x, float y)
 {
     const struct quirc_grid *qr = &q->grids[index];
     struct quirc_point p;
@@ -1448,34 +1487,26 @@ static int fitness_cell(const struct quirc *q, int index, int x, int y)
 {
     const struct quirc_grid *qr = &q->grids[index];
     int score = 0;
-    int u, v;
+    static const float offsets[] = {0.3, 0.5, 0.7};
 
-    for (v = 0; v < 3; v++)
-        for (u = 0; u < 3; u++) {
-            static const float offsets[] = {0.3, 0.5, 0.7};
+    for (uint8_t v = 0; v < 3; v++) {
+        for (uint8_t u = 0; u < 3; u++) {
             struct quirc_point p;
-
-            perspective_map(qr->c, x + offsets[u],
-                           y + offsets[v], &p);
-            if (p.y < 0 || p.y >= q->h || p.x < 0 || p.x >= q->w)
-                continue;
-
-            if (q->pixels[p.y * q->w + p.x])
-                score++;
-            else
-                score--;
+            perspective_map(qr->c, x + offsets[u], y + offsets[v], &p);
+            if (p.y >= 0 && p.y < q->h && p.x >= 0 && p.x < q->w) {
+                score += q->pixels[p.y * q->w + p.x] ? 1 : -1;
+            }
         }
+    }
 
     return score;
 }
 
-static int fitness_ring(const struct quirc *q, int index, int cx, int cy,
-                        int radius)
+static int fitness_ring(const struct quirc *q, int index, int cx, int cy, int radius)
 {
-    int i;
     int score = 0;
 
-    for (i = 0; i < radius * 2; i++) {
+    for (int i = 0; i < radius * 2; i++) {
         score += fitness_cell(q, index, cx - radius + i, cy - radius);
         score += fitness_cell(q, index, cx - radius, cy + radius - i);
         score += fitness_cell(q, index, cx + radius, cy - radius + i);
@@ -1513,18 +1544,15 @@ static int fitness_all(const struct quirc *q, int index)
     int version = (qr->grid_size - 17) / 4;
     const struct quirc_version_info *info = &quirc_version_db[version];
     int score = 0;
-    int i, j;
-    int ap_count;
 
-    /* Check the timing pattern */
-    for (i = 0; i < qr->grid_size - 14; i++) {
+    // Check the timing pattern
+    for (uint16_t i = 0; i < qr->grid_size - 14; i++) {
         int expect = (i & 1) ? 1 : -1;
-
         score += fitness_cell(q, index, i + 7, 6) * expect;
         score += fitness_cell(q, index, 6, i + 7) * expect;
     }
 
-    /* Check capstones */
+    // Check capstones
     score += fitness_capstone(q, index, 0, 0);
     score += fitness_capstone(q, index, qr->grid_size - 7, 0);
     score += fitness_capstone(q, index, 0, qr->grid_size - 7);
@@ -1532,36 +1560,41 @@ static int fitness_all(const struct quirc *q, int index)
     if (version < 0 || version > QUIRC_MAX_VERSION)
         return score;
 
-    /* Check alignment patterns */
-    ap_count = 0;
+    // Check alignment patterns
+    uint16_t ap_count = 0;
     while ((ap_count < QUIRC_MAX_ALIGNMENT) && info->apat[ap_count])
         ap_count++;
 
-    for (i = 1; i + 1 < ap_count; i++) {
+    for (uint16_t i = 1; i + 1 < ap_count; i++) {
         score += fitness_apat(q, index, 6, info->apat[i]);
         score += fitness_apat(q, index, info->apat[i], 6);
     }
 
-    for (i = 1; i < ap_count; i++)
-        for (j = 1; j < ap_count; j++)
-            score += fitness_apat(q, index,
-                    info->apat[i], info->apat[j]);
-//mp_printf(&mp_plat_print, "##score=%d\n",score);
+    for (uint16_t i = 1; i < ap_count; i++) {
+        for (uint16_t j = 1; j < ap_count; j++) {
+            score += fitness_apat(q, index, info->apat[i], info->apat[j]);
+        }
+    }
+
     return score;
 }
 
 static void jiggle_perspective(struct quirc *q, int index)
 {
     struct quirc_grid *qr = &q->grids[index];
+    // If the grid size is less than 53(ver. 9), we won't jiggle the perspective
+    if (qr->grid_size < 53)
+        return;
+
     int best = fitness_all(q, index);
     int pass;
     float adjustments[8];
     int i;
 
     for (i = 0; i < 8; i++)
-        adjustments[i] = qr->c[i] * 0.02;
+        adjustments[i] = qr->c[i] * 0.01;
 
-    for (pass = 0; pass < 5; pass++) {
+    for (pass = 0; pass < 2; pass++) {
         for (i = 0; i < 16; i++) {
             int j = i >> 1;
             int test;
@@ -1588,6 +1621,7 @@ static void jiggle_perspective(struct quirc *q, int index)
     }
 }
 
+
 /* Once the capstones are in place and an alignment point has been
  * chosen, we call this function to set up a grid-reading perspective
  * transform.
@@ -1607,7 +1641,7 @@ static void setup_qr_perspective(struct quirc *q, int index)
            sizeof(rect[0]));
     perspective_setup(qr->c, rect, qr->grid_size - 7, qr->grid_size - 7);
 
-    jiggle_perspective(q, index);
+    // jiggle_perspective(q, index);
 }
 
 /* Rotate the capstone with so that corner 0 is the leftmost with respect
@@ -1750,12 +1784,12 @@ fail:
 struct neighbour {
     int     index;
     float   distance;
-}__attribute__((aligned(8)));
+};
 
 struct neighbour_list {
     struct neighbour    n[QUIRC_MAX_CAPSTONES];
     int                 count;
-}__attribute__((aligned(8)));
+};
 
 static void test_neighbours(struct quirc *q, int i,
                             const struct neighbour_list *hlist,
@@ -1868,18 +1902,19 @@ uint8_t *quirc_begin(struct quirc *q, int *w, int *h)
 void quirc_end(struct quirc *q)
 {
     int i;
+
     pixels_setup(q);
     threshold(q);
 
     for (i = 0; i < q->h; i++)
-	{finder_scan(q, i);}
+        finder_scan(q, i);
 
     for (i = 0; i < q->num_capstones; i++)
-	{test_grouping(q, i);}
+        test_grouping(q, i);
 }
 
 void quirc_extract(const struct quirc *q, int index,
-                   struct quirc_code *code)
+                   struct quirc_code *code, float jitter_x, float jitter_y)
 {
     const struct quirc_grid *qr = &q->grids[index];
     int y;
@@ -1902,7 +1937,7 @@ void quirc_extract(const struct quirc *q, int index,
         int x;
 
         for (x = 0; x < qr->grid_size; x++) {
-            if (read_cell(q, index, x, y) > 0)
+            if (read_cell(q, index, x + jitter_x, y + jitter_y) > 0)
                 code->cell_bitmap[i >> 3] |= (1 << (i & 7));
 
             i++;
@@ -1940,7 +1975,7 @@ struct galois_field {
     int             p;
     const uint8_t   *log;
     const uint8_t   *exp;
-}__attribute__((aligned(8)));
+};
 
 static const uint8_t gf16_exp[16] = {
     0x01, 0x02, 0x04, 0x08, 0x03, 0x06, 0x0c, 0x0b,
@@ -2315,7 +2350,7 @@ struct datastream {
     int     ptr;
 
     uint8_t data[QUIRC_MAX_PAYLOAD];
-}__attribute__((aligned(8)));
+};
 
 static inline int grid_bit(const struct quirc_code *code, int x, int y)
 {
@@ -2798,9 +2833,9 @@ quirc_decode_error_t quirc_decode(const struct quirc_code *code,
 {
     quirc_decode_error_t err;
     struct datastream *ds = fb_alloc(sizeof(struct datastream));
- 
+
     if ((code->size - 17) % 4)
-        { fb_free(); return QUIRC_ERROR_INVALID_GRID_SIZE;  }
+        { fb_free(); return QUIRC_ERROR_INVALID_GRID_SIZE; }
 
     memset(data, 0, sizeof(*data));
     memset(ds, 0, sizeof(*ds));
@@ -2821,29 +2856,13 @@ quirc_decode_error_t quirc_decode(const struct quirc_code *code,
     read_data(code, data, ds);
     err = codestream_ecc(data, ds);
     if (err)
-        { fb_free(); ;return err; }
+        { fb_free(); return err; }
 
     err = decode_payload(data, ds);
     if (err)
-        { fb_free(); ;return err; }
+        { fb_free(); return err; }
 
     fb_free(); return QUIRC_SUCCESS;
-}
-
-void quirc_flip(struct quirc_code *code)
-{
-    struct quirc_code *flipped = fb_alloc(sizeof(struct quirc_code));
-	unsigned int offset = 0;
-	for (int y = 0; y < code->size; y++) {
-		for (int x = 0; x < code->size; x++) {
-			if (grid_bit(code, y, x)) {
-				flipped->cell_bitmap[offset >> 3u] |= (1u << (offset & 7u));
-			}
-			offset++;
-		}
-	}
-	memcpy(&code->cell_bitmap, &flipped->cell_bitmap, sizeof(flipped->cell_bitmap));
-    fb_free();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2871,12 +2890,12 @@ const char *quirc_version(void)
     return "1.0";
 }
 
-//static struct quirc _q;
 struct quirc *quirc_new(void)
 {
     struct quirc *q = fb_alloc(sizeof(*q));
     if (!q)
         return NULL;
+
     memset(q, 0, sizeof(*q));
     return q;
 }
@@ -2891,16 +2910,15 @@ void quirc_destroy(struct quirc *q)
     if (q) fb_free();
 }
 
-//static quirc_pixel_t img_buf[320*240];
 int quirc_resize(struct quirc *q, int w, int h)
 {
-   if (q->image) {fb_free();}
+    if (q->image) fb_free();
     uint8_t *new_image = fb_alloc(w * h);
 
     if (!new_image)
         return -1;
 
-    if (sizeof(*q->image) != sizeof(*q->pixels)) {  //should gray, 1==1
+    if (sizeof(*q->image) != sizeof(*q->pixels)) {
         size_t new_size = w * h * sizeof(quirc_pixel_t);
         if (q->pixels) fb_free();
         quirc_pixel_t *new_pixels = fb_alloc(new_size);
@@ -2909,11 +2927,12 @@ int quirc_resize(struct quirc *q, int w, int h)
             return -1;
         }
         q->pixels = new_pixels;
-		
     }
+
     q->image = new_image;
     q->w = w;
     q->h = h;
+
     return 0;
 }
 
@@ -2947,10 +2966,9 @@ const char *quirc_strerror(quirc_decode_error_t err)
 
 void imlib_find_qrcodes(list_t *out, image_t *ptr, rectangle_t *roi)
 {
-    struct quirc *controller = quirc_new();	
+    struct quirc *controller = quirc_new();
     quirc_resize(controller, roi->w, roi->h);
     uint8_t *grayscale_image = quirc_begin(controller, NULL, NULL);
-	
     switch(ptr->bpp) {
         case IMAGE_BPP_BINARY: {
             for (int y = roi->y, yy = roi->y + roi->h; y < yy; y++) {
@@ -2985,22 +3003,45 @@ void imlib_find_qrcodes(list_t *out, image_t *ptr, rectangle_t *roi)
         }
     }
     quirc_end(controller);
-	//这以上为纠偏，生成QRcode的标准像素数据
     list_init(out, sizeof(find_qrcodes_list_lnk_data_t));
 
     for (int i = 0, j = quirc_count(controller); i < j; i++) {
-		
         struct quirc_code *code = fb_alloc(sizeof(struct quirc_code));
         struct quirc_data *data = fb_alloc(sizeof(struct quirc_data));
-        quirc_extract(controller, i, code);
-		
-        quirc_decode_error_t err = quirc_decode(code, data);
-        if (err == QUIRC_ERROR_DATA_ECC) {
-            quirc_flip(code);
-            err = quirc_decode(code, data);
+        // Offset jitters(noise) were empirically determined.
+        static const float offset_jitters[] = {0, -0.2, -0.3, -0.4, -0.5, 0.2};
+        size_t num_jitters = sizeof(offset_jitters) / sizeof(offset_jitters[0]);
+        bool found = false;
+
+        /* Consideration on jittering:
+         - Jittering is useful because the QR code may not be perfectly aligned with the grid.
+         - This may happen due to lack of precision on capstones position or due to perspective distortions.
+         - The jittering axis and values were empirically determined.
+         - Further investigation is needed to determine a more robust and neat method to improve decoding.*/
+
+        // Check orientation
+        bool jitter_x_axis = 0;
+        if (controller->grids[i].tpep[0].x > controller->grids[i].tpep[2].x) {
+            // If upside down, don't jitter y axis, jitter x instead.
+            jitter_x_axis = 1;
         }
 
-        if(err == QUIRC_SUCCESS) {
+
+        // Loop through jitters values until QR is successfully decoded.
+        for (size_t jitter = 0; jitter < num_jitters; jitter++) {
+            if (jitter_x_axis) {
+                quirc_extract(controller, i, code, offset_jitters[jitter], 0);
+            } else {
+                quirc_extract(controller, i, code, 0, offset_jitters[jitter]);
+            }
+            if (quirc_decode(code, data) == QUIRC_SUCCESS) {
+                found = true;
+                break;
+            }
+        }
+        // quirc_extract(controller, i, code);
+        // if(quirc_decode(code, data) == QUIRC_SUCCESS) {
+        if(found) {
             find_qrcodes_list_lnk_data_t lnk_data;
             rectangle_init(&(lnk_data.rect), code->corners[0].x + roi->x, code->corners[0].y + roi->y, 0, 0);
 
@@ -3037,6 +3078,7 @@ void imlib_find_qrcodes(list_t *out, image_t *ptr, rectangle_t *roi)
         fb_free();
         fb_free();
     }
+
     quirc_destroy(controller);
 }
-#endif //IMLIB_ENABLE_QRCODES
+#endif //IMLIB_ENABLE_QRCODES *INDENT-ON*
