@@ -2723,7 +2723,7 @@ int string_width_px(mp_obj_t str)
   uint32_t state = 0;
   for (; *s; ++s)
     if (!font_utf8_decode_codepoint(&state, &codepoint, *s))
-      if (codepoint >= CHINESE_CODEPOINT_MIN && codepoint <= KOREAN_CODEPOINT_MAX)
+      if (codepoint >= WIDEFONT_CODEPOINT_MIN && codepoint <= WIDEFONT_CODEPOINT_MAX)
         count += font_config_wide.width;
       else
         count += font_config.width;
@@ -2737,7 +2737,7 @@ int string_has_wide_glyph(mp_obj_t str)
   uint32_t state = 0;
   for (; *s; ++s)
     if (!font_utf8_decode_codepoint(&state, &codepoint, *s))
-      if (codepoint >= CHINESE_CODEPOINT_MIN && codepoint <= KOREAN_CODEPOINT_MAX)
+      if (codepoint >= WIDEFONT_CODEPOINT_MIN && codepoint <= WIDEFONT_CODEPOINT_MAX)
         return 1;
   return 0;
 }
@@ -2780,7 +2780,7 @@ void imlib_draw_string(image_t *img, int x_off, int y_off, mp_obj_t str, int c) 
 
   for (; *s; ++s) {
     if (!font_utf8_decode_codepoint(&state, &codepoint, *s)) {
-      if (codepoint >= CHINESE_CODEPOINT_MIN && codepoint <= KOREAN_CODEPOINT_MAX) {
+      if (codepoint >= WIDEFONT_CODEPOINT_MIN && codepoint <= WIDEFONT_CODEPOINT_MAX) {
         // Wide glyph codepoints
         uint8_t buffer[font_len_wide];
         l = 0;
