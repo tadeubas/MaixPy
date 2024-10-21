@@ -175,8 +175,8 @@ STATIC bool init_sdcard_fs(void)
       }
       if (first_part)
       {
-        // use SD card as current directory
-        MP_STATE_PORT(vfs_cur) = vfs;
+        // mount does NOT imply chdir (to avoid importing modules from untrusted sdcard)
+        // MP_STATE_PORT(vfs_cur) = vfs;
         first_part = false;
         break;
       }
