@@ -164,6 +164,7 @@ STATIC bool init_sdcard_fs(void)
       }
       vfs->obj = MP_OBJ_FROM_PTR(vfs_fat);
       vfs->next = NULL;
+      vfs->exec_allowed = false; // Disallow code execution from the SD card
       for (mp_vfs_mount_t **m = &MP_STATE_VM(vfs_mount_table);; m = &(*m)->next)
       {
         // 防止同名的文件系统冲突
