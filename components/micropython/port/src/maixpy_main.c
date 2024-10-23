@@ -273,6 +273,7 @@ STATIC bool mpy_mount_spiffs(spiffs_user_mount_t *spiffs)
   vfs->len = 6;
   vfs->obj = MP_OBJ_FROM_PTR(spiffs);
   vfs->next = NULL;
+  vfs->exec_allowed = false; // Disallow code execution from spiffs
   for (mp_vfs_mount_t **m = &MP_STATE_VM(vfs_mount_table);; m = &(*m)->next)
   {
     if (*m == NULL)
