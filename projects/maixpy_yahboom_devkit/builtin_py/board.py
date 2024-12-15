@@ -103,9 +103,6 @@ except ImportError:
     },
 """
 
-# todo: display seems inverted, need to fix colors
-# todo: maybe camera too?
-# todo: touchscreen not working; if enabled: fails to boot
 # todo: serial console not fully functioning for debugging and/or repl
 config = json.loads("""
 {
@@ -148,7 +145,7 @@ config = json.loads("""
             "I2C_SCL": 9
         },
         "display": {
-            "touch": false,
+            "touch": true,
             "font": [8, 16],
             "font_wide": [16, 16]
         }
