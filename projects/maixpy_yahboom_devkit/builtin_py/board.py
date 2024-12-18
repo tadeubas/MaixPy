@@ -106,7 +106,7 @@ except ImportError:
 # todo: serial console not fully functioning for debugging and/or repl
 config = json.loads("""
 {
-    "type": "yahboom_devkit",
+    "type": "yahboom",
     "lcd": {
         "dcx": 38,
         "ss": 36,
