@@ -498,7 +498,7 @@ extern const struct _mp_obj_module_t mp_module_touchscreen;
 
 #if CONFIG_MAIXPY_HASHLIB_ENABLE
 #define MAIXPY_HASHLIB_DEF \
-    { MP_OBJ_NEW_QSTR(MP_QSTR_uhashlib), (mp_obj_t)&mp_module_uhashlib_maix },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_uhashlib_hw), (mp_obj_t)&mp_module_uhashlib_maix },
 #define MAIXPY_HASHLIB_WEAK_DEF \
     { MP_OBJ_NEW_QSTR(MP_QSTR_hashlib), (mp_obj_t)&mp_module_uhashlib_maix },
 #else
