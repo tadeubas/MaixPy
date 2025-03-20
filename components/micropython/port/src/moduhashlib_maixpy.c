@@ -87,10 +87,10 @@ STATIC mp_obj_t uhashlib_sha256_hard(mp_obj_t self_in,mp_obj_t arg) {
 STATIC mp_obj_t mod_uhashlib_pbkdf2_hmac_sha256(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_password, ARG_salt, ARG_iterations, ARG_dklen };
     static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_password, MP_ARG_OBJ | MP_ARG_REQUIRED, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_salt, MP_ARG_OBJ | MP_ARG_REQUIRED, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_iterations, MP_ARG_INT | MP_ARG_REQUIRED, {.u_int = 0} },
-        { MP_QSTR_dklen, MP_ARG_INT | MP_ARG_INT, {.u_int = 32} },
+        { MP_QSTR_password,  MP_ARG_OBJ | MP_ARG_REQUIRED, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_salt,      MP_ARG_OBJ | MP_ARG_REQUIRED, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_iterations,MP_ARG_INT | MP_ARG_REQUIRED, {.u_int = 0} },
+        { MP_QSTR_dklen,     MP_ARG_INT, {.u_int = 32} },
     };
 
     // uint64_t start_us = sysctl_get_time_us();
@@ -98,14 +98,13 @@ STATIC mp_obj_t mod_uhashlib_pbkdf2_hmac_sha256(size_t n_args, const mp_obj_t *p
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-    // Get password and salt as buffers
+    // Get buffers for password and salt.
     mp_buffer_info_t password_buf, salt_buf;
     mp_get_buffer_raise(args[ARG_password].u_obj, &password_buf, MP_BUFFER_READ);
     mp_get_buffer_raise(args[ARG_salt].u_obj, &salt_buf, MP_BUFFER_READ);
 
-    int iterations = args[ARG_iterations].u_int;
-    int dklen = args[ARG_dklen].u_int;
-
+    uint32_t iterations = args[ARG_iterations].u_int;
+    uint32_t dklen = args[ARG_dklen].u_int;
     if (iterations < 1) {
         mp_raise_ValueError("iterations must be >= 1");
     }
@@ -131,7 +130,7 @@ STATIC mp_obj_t mod_uhashlib_pbkdf2_hmac_sha256(size_t n_args, const mp_obj_t *p
 
     // Precompute HMAC pads
     uint8_t inner_pad[64], outer_pad[64];
-    for (int i = 0; i < 64; i++) {
+    for (size_t i = 0; i < 64; i++) {
         inner_pad[i] = key[i] ^ 0x36;
         outer_pad[i] = key[i] ^ 0x5C;
     }
@@ -158,16 +157,13 @@ STATIC mp_obj_t mod_uhashlib_pbkdf2_hmac_sha256(size_t n_args, const mp_obj_t *p
             sha256_context_t inner_ctx, outer_ctx;
             sha256_quick_init(&inner_ctx, 64);
             size_t total_len = 64;
-            sha256_update_length(total_len);
             sha256_update(&inner_ctx, inner_pad, 64);
             total_len += salt_buf.len + 4;
-            sha256_update_length(total_len);
             sha256_update(&inner_ctx, initial_message, salt_buf.len + 4);
             uint8_t inner_hash[32];
             sha256_final(&inner_ctx, inner_hash);
 
             // Outer hash
-            // sha256_init(&outer_ctx, 64);
             sha256_quick_init(&outer_ctx, 64);
             sha256_update(&outer_ctx, outer_pad, 64); // Fixed pad
             sha256_update(&outer_ctx, inner_hash, 32); // Varying data
