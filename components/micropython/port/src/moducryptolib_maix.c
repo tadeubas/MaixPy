@@ -58,6 +58,7 @@ typedef struct _mp_obj_aes_t {
     context_t ctx;
     uint8_t mode;
     uint8_t key_len;
+    uint8_t gcm_tag[4];
 } mp_obj_aes_t;
 
 const mp_obj_module_t mp_module_ucryptolib;
@@ -162,6 +163,7 @@ STATIC mp_obj_t AES_run(size_t n_args, const mp_obj_t *args, bool encrypt)
             else if (self->key_len == AES_KEYLEN_192) aes_gcm192_hard_encrypt(&ctx, in_bufinfo.buf, in_bufinfo.len, out_buf_ptr, gcm_tag);
             else aes_gcm128_hard_encrypt(&ctx, in_bufinfo.buf, in_bufinfo.len, out_buf_ptr, gcm_tag);
         }
+        memcpy(self->gcm_tag, gcm_tag, sizeof(gcm_tag));
     }
     else if (self->mode == UCRYPTOLIB_MODE_CBC) {
         cbc_context_t ctx;
@@ -211,6 +213,31 @@ STATIC mp_obj_t ucryptolib_aes_decrypt(size_t n_args, const mp_obj_t *args)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(ucryptolib_aes_decrypt_obj, 2, 3, ucryptolib_aes_decrypt);
 
+STATIC mp_obj_t ucryptolib_aes_get_tag(mp_obj_t self_in) {
+    mp_obj_aes_t *self = MP_OBJ_TO_PTR(self_in);
+    if (self->mode != UCRYPTOLIB_MODE_GCM) {
+        mp_raise_ValueError("tag is only available in GCM mode");
+    }
+    return mp_obj_new_bytes(self->gcm_tag, sizeof(self->gcm_tag));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(ucryptolib_aes_get_tag_obj, ucryptolib_aes_get_tag);
+
+STATIC mp_obj_t ucryptolib_aes_verify_tag(mp_obj_t self_in, mp_obj_t tag_in) {
+    mp_obj_aes_t *self = MP_OBJ_TO_PTR(self_in);
+    if (self->mode != UCRYPTOLIB_MODE_GCM) {
+        mp_raise_ValueError("tag verification only available in GCM mode");
+    }
+    mp_buffer_info_t taginfo;
+    mp_get_buffer_raise(tag_in, &taginfo, MP_BUFFER_READ);
+    if (taginfo.len != sizeof(self->gcm_tag)) {
+        mp_raise_ValueError("wrong tag length");
+    }
+    if (memcmp(self->gcm_tag, taginfo.buf, sizeof(self->gcm_tag)) != 0) {
+        mp_raise_ValueError("tag verification failed");
+    }
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(ucryptolib_aes_verify_tag_obj, ucryptolib_aes_verify_tag);
 /*
 //----------------------------------------------------
 STATIC mp_obj_t ucryptolib_aes_getIV(mp_obj_t self_in)
@@ -225,6 +252,8 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(ucryptolib_aes_getIV_obj, ucryptolib_aes_getIV)
 STATIC const mp_rom_map_elem_t ucryptolib_aes_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_encrypt), MP_ROM_PTR(&ucryptolib_aes_encrypt_obj) },
     { MP_ROM_QSTR(MP_QSTR_decrypt), MP_ROM_PTR(&ucryptolib_aes_decrypt_obj) },
+    { MP_ROM_QSTR(MP_QSTR_digest), MP_ROM_PTR(&ucryptolib_aes_get_tag_obj) },
+    { MP_ROM_QSTR(MP_QSTR_verify), MP_ROM_PTR(&ucryptolib_aes_verify_tag_obj) },
     //{ MP_ROM_QSTR(MP_QSTR_getIV), MP_ROM_PTR(&ucryptolib_aes_getIV_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(ucryptolib_aes_locals_dict, ucryptolib_aes_locals_dict_table);
