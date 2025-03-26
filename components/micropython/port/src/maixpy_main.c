@@ -261,9 +261,8 @@ MP_NOINLINE STATIC spiffs_user_mount_t *init_flash_spiffs()
   return vfs_spiffs;
 }
 
-STATIC bool mpy_mount_spiffs(spiffs_user_mount_t *spiffs)
+STATIC bool mpy_mount_spiffs(spiffs_user_mount_t *spiffs, mp_vfs_mount_t *vfs)
 {
-  mp_vfs_mount_t *vfs = m_new_obj(mp_vfs_mount_t);
   if (vfs == NULL)
   {
     printk("[MaixPy]:can't mount flash\n");
@@ -594,8 +593,9 @@ soft_reset:
 #endif
   peripherals_init();
   // initialise peripherals
+  main_vfs = m_new_obj(mp_vfs_mount_t);
   bool mounted_flash = false;
-  mounted_flash = mpy_mount_spiffs(&spiffs_user_mount_handle); //init spiffs of flash
+  mounted_flash = mpy_mount_spiffs(&spiffs_user_mount_handle, main_vfs); //init spiffs of flash
   if (mounted_flash)
   // {  // Uncomment to enable load config from /flash/config.json
   //   maix_config_init();
