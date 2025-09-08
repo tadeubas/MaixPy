@@ -1,3 +1,4 @@
+#include <stdint.h>
 
 static struct sensor_config_t {
     uint8_t cmos_pclk;
@@ -16,7 +17,5 @@ static struct sensor_config_t {
 } sensor_config = {
     15, 14, 17, 13, 12, 11,
     8, 2, 10, 9, 0, 0
-    // 47, 46, 45, 44, 43, 42,
-    // 8, 2, 41, 40, 0, 0
 };
 

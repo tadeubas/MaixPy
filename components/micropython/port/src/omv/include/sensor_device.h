@@ -4,6 +4,8 @@
  *
  */
 
+#include <stdint.h>
+
 static struct sensor_config_t {
     uint8_t cmos_pclk;
     uint8_t cmos_xclk;
